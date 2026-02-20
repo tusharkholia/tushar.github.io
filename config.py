@@ -1,4 +1,4 @@
-"""Application configuration and environment loading."""
+"""Configuration for PE Lens platform."""
 from __future__ import annotations
 
 import os
@@ -11,11 +11,12 @@ load_dotenv()
 
 @dataclass(frozen=True)
 class Settings:
-    """Centralized runtime settings."""
-
     openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    max_sources: int = int(os.getenv("MAX_SOURCES", "8"))
+
+    tavily_api_key: str | None = os.getenv("TAVILY_API_KEY")
+    max_deals: int = int(os.getenv("MAX_DEALS", "10"))
+    max_search_results: int = int(os.getenv("MAX_SEARCH_RESULTS", "18"))
     recent_months_window: int = int(os.getenv("RECENT_MONTHS_WINDOW", "12"))
     request_timeout_seconds: int = int(os.getenv("REQUEST_TIMEOUT_SECONDS", "8"))
 

@@ -1,115 +1,123 @@
-"""Streamlit interface for AI Research & Deal Memo Generator."""
+"""Streamlit UI for PE Lens – Mid-Market Deal Intelligence Platform."""
 from __future__ import annotations
 
-import asyncio
 import json
 
+import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
+from analysis_engine import AnalysisEngine
 from config import settings
-from services.analysis_engine import AnalysisEngine
-from services.exporter import memo_to_docx_bytes, memo_to_pdf_bytes
-from services.research_engine import ResearchEngine
+from data_collection import DealResearchEngine
+from report_generator import deals_csv_bytes, render_markdown_report, report_to_docx_bytes, report_to_pdf_bytes
 
-st.set_page_config(page_title="AI Research & Deal Memo Generator", page_icon="📈", layout="wide")
+st.set_page_config(page_title="PE Lens", page_icon="🔎", layout="wide")
 
 st.markdown(
     """
     <style>
-        .stApp { background: linear-gradient(180deg, #0a0f1c 0%, #10182b 100%); color: #e5ecff; }
-        h1, h2, h3 { color: #e5ecff !important; }
-        .block-container { padding-top: 2rem; }
-        .memo-card { background: #111d33; border-radius: 12px; padding: 1rem 1.25rem; border: 1px solid #223150; }
+      .stApp { background: linear-gradient(180deg,#0b0f1a 0%, #10182c 100%); color: #dbe6ff; }
+      h1,h2,h3,h4,p,label { color: #dbe6ff !important; }
+      [data-testid="stSidebar"] { background: #0d1525; }
+      .panel { background:#111d32; border:1px solid #223353; border-radius:12px; padding:1rem; }
+      .small-note { color:#9ab0d6; font-size:0.9rem; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-st.title("📈 AI Research & Deal Memo Generator")
-st.caption("Type a topic. The app researches the web and drafts an investment-grade memo.")
+st.title("🔎 PE Lens – Mid-Market Deal Intelligence Platform")
+st.caption("Live web deal research, valuation extraction, trend analytics, and institutional-grade memo generation.")
 
 query = st.text_input(
-    "Research topic / question",
-    placeholder="e.g., SaaS valuation multiples 2025–2026",
+    "Sector, geography, or theme",
+    placeholder="US Mid-Market Healthcare IT Deals 2026",
 )
 
-col_a, col_b = st.columns([1, 3])
-with col_a:
-    generate_clicked = st.button("Generate Memo", type="primary", use_container_width=True)
-with col_b:
-    st.write("Preferred sources are credible financial/business outlets from the last 12 months.")
-
-if generate_clicked:
+if st.button("Generate Intelligence Report", type="primary", use_container_width=True):
     if not query.strip():
-        st.warning("Please enter a research topic first.")
+        st.warning("Please enter a query.")
         st.stop()
-
     if not settings.openai_api_key:
-        st.error("OPENAI_API_KEY is missing. Add it in your environment or .env file.")
+        st.error("OPENAI_API_KEY is required.")
         st.stop()
 
-    with st.spinner("Running web research and analysis..."):
-        engine = ResearchEngine(max_sources=settings.max_sources, timeout_seconds=settings.request_timeout_seconds)
-        sources = asyncio.run(engine.research(query.strip()))
+    with st.spinner("Collecting market data and generating report..."):
+        research_engine = DealResearchEngine()
+        deals, sources = research_engine.build_deal_universe(query.strip())
 
-        if not sources:
-            st.error("Could not extract enough credible source content. Try a broader query.")
+        if not deals:
+            st.error("No qualifying deals extracted. Try broadening query terms.")
             st.stop()
 
-        analysis = AnalysisEngine()
-        memo = analysis.generate_memo(query=query.strip(), sources=sources)
+        analysis_engine = AnalysisEngine()
+        analysis = analysis_engine.generate_structured_analysis(query.strip(), deals)
+        report_md = render_markdown_report(query.strip(), analysis, deals)
 
-    st.success(f"Generated memo using {len(sources)} sources.")
+    st.success(f"Report generated with {len(deals)} deals from {len(sources)} researched sources.")
 
-    st.subheader("Memo")
-    st.markdown('<div class="memo-card">', unsafe_allow_html=True)
-    st.markdown(memo.replace("\n", "  \n"))
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    st.markdown(report_md)
     st.markdown("</div>", unsafe_allow_html=True)
 
-    with st.expander("Research sources"):
-        for source in sources:
-            st.markdown(f"- [{source.title}]({source.url}) ({source.source})")
+    st.subheader("Recent Deal Snapshot")
+    table = pd.DataFrame(
+        [
+            {
+                "Date": d.date,
+                "Target": d.target,
+                "Acquirer": d.acquirer,
+                "Deal Size": d.deal_size,
+                "Valuation Multiple": d.valuation_multiple,
+                "Strategic Rationale": d.strategic_rationale,
+            }
+            for d in deals
+        ]
+    )
+    st.dataframe(table, use_container_width=True)
 
-    pdf_bytes = memo_to_pdf_bytes(memo)
-    docx_bytes = memo_to_docx_bytes(memo)
+    with st.expander("Source evidence"):
+        for s in sources:
+            st.markdown(f"- [{s.title}]({s.url}) • {s.outlet} • {s.published or 'Date unavailable'}")
 
-    c1, c2 = st.columns(2)
+    title = analysis.get("title", f"PE Lens Report - {query.strip()}")
+    pdf_file = report_to_pdf_bytes(report_md, title)
+    docx_file = report_to_docx_bytes(report_md, title)
+    csv_file = deals_csv_bytes(deals)
+
+    c1, c2, c3 = st.columns(3)
     with c1:
-        st.download_button(
-            "Export PDF",
-            data=pdf_bytes,
-            file_name="deal_memo.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
+        st.download_button("Export PDF", pdf_file, "pe_lens_report.pdf", "application/pdf", use_container_width=True)
     with c2:
         st.download_button(
-            "Export Word (.docx)",
-            data=docx_bytes,
-            file_name="deal_memo.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "Export Word",
+            docx_file,
+            "pe_lens_report.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             use_container_width=True,
         )
+    with c3:
+        st.download_button("Download Deal CSV", csv_file, "pe_lens_deals.csv", "text/csv", use_container_width=True)
 
-    escaped_memo = json.dumps(memo)
+    memo_json = json.dumps(report_md)
     components.html(
         f"""
-        <button id="copy-btn" style="padding:10px 14px;border-radius:8px;border:none;background:#2f7df6;color:white;font-weight:600;cursor:pointer;">Copy Memo to Clipboard</button>
-        <span id="copy-status" style="margin-left:10px;color:#9fd3ff;"></span>
+        <button id="copy-btn" style="padding:9px 14px;border-radius:8px;border:none;background:#2f7df6;color:white;font-weight:700;">Copy to Clipboard</button>
+        <span id="status" style="margin-left:10px;color:#9ab0d6;"></span>
         <script>
-            const memo = {escaped_memo};
-            const btn = document.getElementById('copy-btn');
-            const status = document.getElementById('copy-status');
-            btn.onclick = async () => {{
-                try {{
-                    await navigator.clipboard.writeText(memo);
-                    status.textContent = 'Copied!';
-                }} catch (e) {{
-                    status.textContent = 'Clipboard unavailable in this browser session.';
-                }}
-            }};
+          const memo = {memo_json};
+          document.getElementById('copy-btn').onclick = async () => {{
+            try {{
+              await navigator.clipboard.writeText(memo);
+              document.getElementById('status').textContent = 'Copied';
+            }} catch (err) {{
+              document.getElementById('status').textContent = 'Clipboard access unavailable';
+            }}
+          }};
         </script>
         """,
-        height=60,
+        height=55,
     )
+
+st.markdown("<p class='small-note'>Built for PE funds, IB boutiques, independent sponsors, and corp dev teams.</p>", unsafe_allow_html=True)
