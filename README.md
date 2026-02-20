@@ -1,120 +1,69 @@
-# PE Lens – Mid-Market Deal Intelligence Platform
+# GMAT AI Coach
 
-PE Lens is a production-oriented Streamlit SaaS starter for generating institutional-grade deal intelligence memos from a single text query.
+Production-capable local GMAT tutoring assistant built with **Streamlit + Python + SQLite + optional RAG**.
 
-## What it does
-
-A user enters a theme such as:
-- `US Healthcare IT deals 2026`
-- `UK mid-market SaaS acquisitions`
-- `Climate tech growth equity Europe`
-
-The platform then:
-1. Runs automated web research across credible financial sources.
-2. Extracts deal-level fields (target, acquirer, size, multiples, rationale, etc.).
-3. Synthesizes trends with OpenAI.
-4. Produces a structured memo in investment-committee style.
-5. Exports report to PDF/Word and deal table to CSV.
+## Features
+- Explain & coach any GMAT Quant/Verbal question with structured tutor output.
+- Optional PDF ingestion (local) with chunking + embeddings + vector retrieval.
+- Performance tracking: attempts, timing, weaknesses, trends, streak/XP/levels.
+- Adaptive study plan generator.
+- Practice-similar question generation.
+- Export CSV + PDF summary report.
+- Free/Pro feature flags and Stripe checkout scaffolding.
+- Daily challenge leaderboard, ELI5 mode.
 
 ## Architecture
+- `app.py`: Streamlit UI and orchestration.
+- `backend/explain_engine.py`: prompt templates, OpenAI calls, fallback tutor.
+- `backend/pdf_ingest.py`: PDF extraction + async embedding ingestion.
+- `backend/vectorstore.py`: Chroma primary, memory fallback.
+- `backend/tracker.py`: SQLite persistence and analytics.
+- `backend/study_plan.py`: adaptive plan logic.
+- `backend/monetization.py`: free/pro gate + Stripe hook.
+- `db/schema.sql`: database schema.
 
-```text
-app.py                # Streamlit UI
-config.py             # Environment + runtime settings
-data_collection.py    # Async web research + extraction
-analysis_engine.py    # Institutional trend synthesis
-report_generator.py   # Structured memo rendering + export helpers
-requirements.txt
-.env.example
-```
-
-## Functional coverage
-
-- **Input UX**: one text box + "Generate Intelligence Report" button.
-- **Automated research**:
-  - Tavily News API (optional) + DuckDuckGo discovery.
-  - RSS ingestion (Reuters/FT/CNBC/BusinessWire).
-  - Domain credibility filtering.
-  - Async content fetching + article text extraction.
-- **Data extraction**:
-  - LLM-based structured parsing from article text into deal records.
-  - Captures target/acquirer/deal size/multiple/rationale/sector/geography/date.
-  - Fallback to "Not disclosed" where data is unavailable.
-- **Analysis output**:
-  - Executive summary, market context, valuation insights, buyer landscape,
-    key themes, risks/headwinds, forward outlook, analyst take.
-- **Export**:
-  - PDF download.
-  - Word (.docx) download.
-  - Deal snapshot CSV download.
-  - Copy full memo to clipboard.
-
-## Setup (Local)
-
-1. Clone repo and enter directory
-   ```bash
-   git clone <repo-url>
-   cd tushar.github.io
-   ```
-2. Create virtual environment
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   ```
-3. Install dependencies
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Configure environment
-   ```bash
-   cp .env.example .env
-   ```
-5. Add required keys in `.env`
-   ```env
-   OPENAI_API_KEY=...
-   OPENAI_MODEL=gpt-4o-mini
-   TAVILY_API_KEY=...  # optional but recommended for stronger news coverage
-   ```
-
-## Run
-
+## Local setup
 ```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# add OPENAI_API_KEY=... in .env
 streamlit run app.py
 ```
 
-## Example run
+## Environment variables
+- `OPENAI_API_KEY` (optional but recommended)
+- `OPENAI_MODEL=gpt-4.1-mini`
+- `FEATURE_TIER=free|pro`
+- `VECTOR_BACKEND=chroma|memory`
+- `EMBEDDING_BACKEND=openai|local`
+- `STRIPE_SECRET_KEY` (optional scaffold)
 
-- Query: `US Mid-Market Healthcare IT Deals 2026`
-- Expected behavior:
-  - Spinner appears while data collection + synthesis executes.
-  - Report renders with all required sections.
-  - Deal table displays extracted transactions.
-  - Export buttons provide PDF, DOCX, and CSV files.
+## PDF ingestion
+Use the **Upload Reference PDFs** section, then click **Ingest PDFs**. Data stays local by default.
 
-## Deployment guide
+## Testing
+```bash
+pytest -q
+```
 
-### Streamlit Community Cloud
-1. Push this repo to GitHub.
-2. In Streamlit Cloud, create new app and point to `app.py`.
-3. Add secrets (OPENAI_API_KEY and optional TAVILY_API_KEY).
-4. Deploy.
+## Deploy notes (Render/Railway/Heroku)
+- Deploy as a web service with `streamlit run app.py --server.port=$PORT --server.address=0.0.0.0`
+- Persist `db/` volume for history/vector data.
+- Set env vars in platform secrets.
 
-### Docker / VM / PaaS
-1. Provision Python 3.11+ runtime.
-2. Install dependencies from `requirements.txt`.
-3. Inject environment variables via secrets manager.
-4. Run:
-   ```bash
-   streamlit run app.py --server.port 8501 --server.address 0.0.0.0
-   ```
-5. Front with reverse proxy (Nginx/Caddy) and TLS for production.
+## Stripe integration points
+`backend/monetization.py#create_stripe_checkout_session_stub` shows checkout payload shape.
+Replace with real `stripe.checkout.Session.create(...)` in production.
 
-## SaaS scalability extensions
+## Demo script
+```bash
+python scripts/demo_session.py
+```
 
-Designed to extend with:
-- Auth and accounts
-- Saved searches
-- Scheduled weekly reports
-- Payment/paywall via Stripe
-- Persistent deal database
-- Sector dashboards and valuation trend charts
+## Security & ethics
+- API keys loaded from `.env`; never commit real keys.
+- PDF text sanitized for control characters.
+- Citation policy: avoid quoting >25 words from a source chunk.
+- Disclaimer included in app: not an official GMAT product.
